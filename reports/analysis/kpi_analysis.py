@@ -9,11 +9,12 @@ Usage:
     python reports/analysis/kpi_analysis.py
 
 Outputs:
-    reports/analysis/kpi_results.json   — machine-readable KPI values
+    reports/analysis/kpi_results.json   — machine-readable KPI values (strict JSON)
     reports/analysis/insights.md        — business insights with data evidence
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -27,9 +28,25 @@ DB_PATH = PROJECT_ROOT / "data" / "processed" / "curated.duckdb"
 OUT_JSON = Path(__file__).parent / "kpi_results.json"
 OUT_INSIGHTS = Path(__file__).parent / "insights.md"
 
+# Service/administrative stock codes present in dim_products.
+# Excluded from product revenue rankings because they are not retail products.
+# DOT = "DOTCOM POSTAGE", POST = "POSTAGE", M = "Manual" (administrative adjustment)
+NON_PRODUCT_CODES = ("'DOT'", "'POST'", "'M'")
+
 
 def run(sql: str, con) -> list[dict]:
     return con.execute(sql).df().to_dict(orient="records")
+
+
+def _replace_nan(obj):
+    """Recursively replace float NaN/Inf with None for strict JSON compliance."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _replace_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_replace_nan(v) for v in obj]
+    return obj
 
 
 def main():
@@ -75,6 +92,25 @@ def main():
     )
     results["repeat_purchase_rate_pct"] = rows[0]["repeat_rate"]
 
+    # KPI 4b — Returning Customer Revenue Share
+    # Returning customers: those with order_count > 1 in dim_customers (identified buyers only).
+    # Guest orders (null customer_id) are not joinable and count as non-returning.
+    rows = run(
+        """
+        SELECT
+            ROUND(100.0 * SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END)
+                  / NULLIF(SUM(fo.order_revenue), 0), 2) AS returning_customer_revenue_pct,
+            ROUND(SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END), 2)
+                AS returning_customer_revenue_gbp
+        FROM curated.fact_orders fo
+        LEFT JOIN curated.dim_customers dc ON fo.customer_id = dc.customer_id
+        WHERE NOT fo.is_cancelled
+        """,
+        con,
+    )
+    results["returning_customer_revenue_pct"] = rows[0]["returning_customer_revenue_pct"]
+    results["returning_customer_revenue_gbp"] = rows[0]["returning_customer_revenue_gbp"]
+
     # KPI 5 — Monthly Revenue & Growth
     rows = run(
         """
@@ -97,16 +133,20 @@ def main():
         """,
         con,
     )
+    # mom_growth_pct is NULL for the first month (no prior month); serialised as null.
     results["monthly_revenue"] = [
         {"month": str(r["month"])[:7], "revenue_gbp": r["revenue"], "mom_growth_pct": r["mom_growth_pct"]}
         for r in rows
     ]
 
-    # KPI 6 — Top 10 Products
+    # KPI 6 — Top 10 Products (retail products only)
+    # Service/admin codes DOT, POST, M are excluded; see NON_PRODUCT_CODES.
+    excluded = ", ".join(NON_PRODUCT_CODES)
     rows = run(
-        """
+        f"""
         SELECT stock_code, description, total_revenue, total_quantity_sold
         FROM curated.dim_products
+        WHERE stock_code NOT IN ({excluded})
         ORDER BY total_revenue DESC
         LIMIT 10
         """,
@@ -114,12 +154,13 @@ def main():
     )
     results["top_10_products"] = rows
 
-    # KPI 6b — Bottom 10 Products (non-zero revenue)
+    # KPI 6b — Bottom 10 Products (retail products only; non-zero revenue)
     rows = run(
-        """
+        f"""
         SELECT stock_code, description, total_revenue, total_quantity_sold
         FROM curated.dim_products
         WHERE total_revenue > 0
+          AND stock_code NOT IN ({excluded})
         ORDER BY total_revenue ASC
         LIMIT 10
         """,
@@ -151,10 +192,12 @@ def main():
     )
     results["top_10_countries"] = rows
 
-    OUT_JSON.write_text(json.dumps(results, indent=2, default=str))
+    # Sanitise NaN/Inf → null before writing; validate output is strict JSON.
+    clean = _replace_nan(results)
+    OUT_JSON.write_text(json.dumps(clean, indent=2, allow_nan=False))
     print(f"KPI results written to {OUT_JSON}")
 
-    _write_insights(results)
+    _write_insights(clean)
     print(f"Business insights written to {OUT_INSIGHTS}")
     con.close()
 
@@ -165,11 +208,14 @@ def _write_insights(r: dict):
     trough = min(monthly, key=lambda x: x["revenue_gbp"]) if monthly else {}
     top_product = r["top_10_products"][0] if r.get("top_10_products") else {}
     top_country = r["top_10_countries"][0] if r.get("top_10_countries") else {}
+    repeat_rate = r.get("repeat_purchase_rate_pct") or 0
+    ret_rev_pct = r.get("returning_customer_revenue_pct") or 0
+    ret_rev_gbp = r.get("returning_customer_revenue_gbp") or 0
 
     lines = [
         "# Business Insights — Public E-Commerce Platform",
         "",
-        f"_Generated from KPI analysis. All figures in GBP (£)._",
+        "_Generated from KPI analysis. All figures in GBP (£)._",
         "",
         "---",
         "",
@@ -185,15 +231,19 @@ def _write_insights(r: dict):
         "",
         "---",
         "",
-        "## Insight 2 — High Repeat-Purchase Rate Indicates Loyal Core",
+        "## Insight 2 — Returning Customers Drive the Majority of Revenue",
         "",
-        f"**Observation:** {r.get('repeat_purchase_rate_pct', 0):.1f}% of identified customers placed more than one order.",
+        f"**Observation:** {repeat_rate:.1f}% of identified customers placed more than one order. "
+        f"These returning customers account for **{ret_rev_pct:.1f}% of total attributed revenue** "
+        f"(£{ret_rev_gbp:,.2f} of total orders joined to known customers).",
         "",
-        "**Evidence:** `curated.dim_customers.order_count > 1` / total identified customers.",
+        "**Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders.order_revenue`. "
+        "Guest orders (null `customer_id`) are not attributed to either segment.",
         "",
-        "**Business implication:** The majority of revenue comes from returning buyers. "
-        "Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than acquisition. "
-        "Guest checkouts (null CustomerID) are excluded — the true repeat rate may differ.",
+        "**Business implication:** Both customer-count share and revenue share confirm that repeat buyers "
+        "are the backbone of this business. Retention programs (loyalty rewards, re-engagement campaigns) "
+        "likely have higher ROI than customer acquisition. "
+        "Guest checkout rate (~25%) means true repeat-purchase rate is understated.",
         "",
         "---",
         "",
@@ -212,12 +262,13 @@ def _write_insights(r: dict):
         "",
         "## Summary KPIs",
         "",
-        f"| KPI | Value |",
-        f"|-----|-------|",
+        "| KPI | Value |",
+        "|-----|-------|",
         f"| Total Revenue | £{r.get('total_revenue_gbp', 0):,.2f} |",
         f"| Total Orders | {r.get('total_orders', 0):,} |",
         f"| Average Order Value | £{r.get('avg_order_value_gbp', 0):,.2f} |",
-        f"| Repeat Purchase Rate | {r.get('repeat_purchase_rate_pct', 0):.1f}% |",
+        f"| Repeat Purchase Rate | {repeat_rate:.1f}% |",
+        f"| Returning Customer Revenue Share | {ret_rev_pct:.1f}% |",
         f"| Cancellation Rate | {r.get('cancellation_rate_pct', 0):.1f}% |",
         "",
     ]

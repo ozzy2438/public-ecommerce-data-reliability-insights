@@ -147,22 +147,23 @@ ORDER BY month;
 
 | Field | Value |
 |-------|-------|
-| **Definition** | Revenue rank per StockCode / Description |
+| **Definition** | Revenue rank per StockCode / Description (retail products only) |
 | **Source columns** | `StockCode`, `Description`, `Quantity`, `UnitPrice` |
-| **Filter** | InvoiceNo NOT LIKE 'C%', Quantity > 0, UnitPrice > 0 |
+| **Filter** | InvoiceNo NOT LIKE 'C%', Quantity > 0, UnitPrice > 0; service/admin codes excluded |
 | **Unit** | GBP (£) |
-| **Table** | `curated.dim_products`, `curated.fact_sales` |
+| **Table** | `curated.dim_products` |
+| **Exclusions** | `stock_code NOT IN ('DOT', 'POST', 'M')` — these are service/admin codes (DOTCOM POSTAGE, POSTAGE, Manual) not retail products |
 
 ```sql
 SELECT
     stock_code,
     description,
-    SUM(quantity * unit_price) AS product_revenue,
-    RANK() OVER (ORDER BY SUM(quantity * unit_price) DESC) AS revenue_rank
-FROM curated.fact_sales
-WHERE is_cancelled = FALSE
-GROUP BY stock_code, description
-ORDER BY revenue_rank;
+    total_revenue,
+    total_quantity_sold
+FROM curated.dim_products
+WHERE stock_code NOT IN ('DOT', 'POST', 'M')
+ORDER BY total_revenue DESC
+LIMIT 10;
 ```
 
 ---
@@ -246,6 +247,30 @@ FROM curated.fact_orders;
 
 ---
 
+### KPI 4b — Returning Customer Revenue Share
+
+| Field | Value |
+|-------|-------|
+| **Definition** | Share of non-cancelled order revenue attributable to customers who placed more than one order |
+| **Source columns** | `order_revenue`, `customer_id`, `order_count` |
+| **Filter** | `fact_orders.is_cancelled = FALSE`; customers matched via `dim_customers` LEFT JOIN |
+| **Unit** | Percentage (%) and GBP (£) |
+| **Table** | `curated.fact_orders`, `curated.dim_customers` |
+| **Caveat** | Guest orders (null `customer_id`) cannot be joined; they are excluded from both returning and one-time segments |
+
+```sql
+SELECT
+    ROUND(100.0 * SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END)
+          / NULLIF(SUM(fo.order_revenue), 0), 2) AS returning_customer_revenue_pct,
+    ROUND(SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END), 2)
+        AS returning_customer_revenue_gbp
+FROM curated.fact_orders fo
+LEFT JOIN curated.dim_customers dc ON fo.customer_id = dc.customer_id
+WHERE NOT fo.is_cancelled;
+```
+
+---
+
 ## Assumptions
 
 1. **Revenue currency:** All values are GBP (£); no FX conversion applied.
@@ -254,3 +279,4 @@ FROM curated.fact_orders;
 4. **Stock descriptions:** Where the same StockCode has multiple descriptions, the most frequent description is used in `dim_products`.
 5. **Date range:** 2010-12-01 to 2011-12-09 (per known dataset bounds); any rows outside this window are flagged.
 6. **Negative quantities outside cancellations:** Treated as anomalies, logged, and excluded from revenue calculations.
+7. **Non-product stock codes:** DOT, POST, M are excluded from product revenue rankings as they represent postage and manual/administrative adjustments, not retail products.

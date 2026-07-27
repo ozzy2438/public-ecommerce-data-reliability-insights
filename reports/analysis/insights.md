@@ -14,13 +14,13 @@ _Generated from KPI analysis. All figures in GBP (£)._
 
 ---
 
-## Insight 2 — High Repeat-Purchase Rate Indicates Loyal Core
+## Insight 2 — Returning Customers Drive the Majority of Revenue
 
-**Observation:** 65.6% of identified customers placed more than one order.
+**Observation:** 65.6% of identified customers placed more than one order. These returning customers account for **77.7% of total attributed revenue** (£8,273,219.33 of total orders joined to known customers).
 
-**Evidence:** `curated.dim_customers.order_count > 1` / total identified customers.
+**Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders.order_revenue`. Guest orders (null `customer_id`) are not attributed to either segment.
 
-**Business implication:** The majority of revenue comes from returning buyers. Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than acquisition. Guest checkouts (null CustomerID) are excluded — the true repeat rate may differ.
+**Business implication:** Both customer-count share and revenue share confirm that repeat buyers are the backbone of this business. Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than customer acquisition. Guest checkout rate (~25%) means true repeat-purchase rate is understated.
 
 ---
 
@@ -42,4 +42,5 @@ _Generated from KPI analysis. All figures in GBP (£)._
 | Total Orders | 19,960 |
 | Average Order Value | £533.17 |
 | Repeat Purchase Rate | 65.6% |
+| Returning Customer Revenue Share | 77.7% |
 | Cancellation Rate | 16.1% |

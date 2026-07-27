@@ -3,11 +3,13 @@
   "total_orders": 19960,
   "avg_order_value_gbp": 533.17,
   "repeat_purchase_rate_pct": 65.58,
+  "returning_customer_revenue_pct": 77.74,
+  "returning_customer_revenue_gbp": 8273219.33,
   "monthly_revenue": [
     {
       "month": "2010-12",
       "revenue_gbp": 821452.73,
-      "mom_growth_pct": NaN
+      "mom_growth_pct": null
     },
     {
       "month": "2011-01",
@@ -72,12 +74,6 @@
   ],
   "top_10_products": [
     {
-      "stock_code": "DOT",
-      "description": "DOTCOM POSTAGE",
-      "total_revenue": 206248.77,
-      "total_quantity_sold": 706
-    },
-    {
       "stock_code": "22423",
       "description": "REGENCY CAKESTAND 3 TIER",
       "total_revenue": 174156.54,
@@ -114,22 +110,28 @@
       "total_quantity_sold": 78033
     },
     {
-      "stock_code": "POST",
-      "description": "POSTAGE",
-      "total_revenue": 78101.88,
-      "total_quantity_sold": 3150
-    },
-    {
-      "stock_code": "M",
-      "description": "Manual",
-      "total_revenue": 77750.27,
-      "total_quantity_sold": 6984
-    },
-    {
       "stock_code": "23084",
       "description": "RABBIT NIGHT LIGHT",
       "total_revenue": 66870.03,
       "total_quantity_sold": 30739
+    },
+    {
+      "stock_code": "22086",
+      "description": "PAPER CHAIN KIT 50'S CHRISTMAS",
+      "total_revenue": 64875.59,
+      "total_quantity_sold": 19329
+    },
+    {
+      "stock_code": "84879",
+      "description": "ASSORTED COLOUR BIRD ORNAMENT",
+      "total_revenue": 58927.62,
+      "total_quantity_sold": 36362
+    },
+    {
+      "stock_code": "79321",
+      "description": "CHILLI LIGHTS",
+      "total_revenue": 54096.36,
+      "total_quantity_sold": 10302
     }
   ],
   "bottom_10_products": [
