@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pandas as pd
 
 
@@ -27,6 +28,7 @@ REPORT_DIR = PROJECT_ROOT / "reports"
 ARCHIVE_PATH = RAW_DIR / "online-retail.zip"
 MANIFEST_PATH = RAW_DIR / "source_manifest.json"
 QUALITY_REPORT_PATH = REPORT_DIR / "data_quality_report.md"
+CURATED_DB_PATH = PROCESSED_DIR / "curated.duckdb"
 
 SOURCE_URL = "https://archive.ics.uci.edu/static/public/352/online+retail.zip"
 SOURCE_RECORD_URL = "https://archive.ics.uci.edu/dataset/352/online-retail"
@@ -343,8 +345,129 @@ def write_quality_report(manifest: dict[str, Any], quality: dict[str, Any], chec
         "- `data/processed/fact_sales.csv`, `fact_orders.csv`",
         "- `data/processed/dim_customer.csv`, `dim_product.csv`",
         "- `data/processed/agg_monthly_sales.csv`, `agg_country_sales.csv`",
+        "- `data/processed/curated.duckdb` (DuckDB database with `curated.*` tables)",
     ])
     QUALITY_REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def build_curated_database(clean: pd.DataFrame) -> dict[str, int]:
+    """Materialize a privacy-safe DuckDB handoff for downstream analysis.
+
+    The CSV outputs remain the audit-friendly interchange layer. This database
+    uses the snake_case table names documented by the analytics phase and contains
+    only the salted customer key, never the source CustomerID.
+
+    Tables are materialized in DuckDB's default ``main`` schema. The database
+    itself is named ``curated`` (from ``curated.duckdb``), so this preserves the
+    downstream two-part reference ``curated.fact_sales`` without the catalog /
+    schema ambiguity caused by also creating a schema named ``curated``.
+    """
+    positive_mask = (
+        clean["Quantity"].gt(0)
+        & clean["UnitPrice"].gt(0)
+        & ~clean["is_cancelled"]
+    )
+    positive = clean.loc[positive_mask].copy()
+    order_mask = clean["is_cancelled"] | positive_mask
+    order_lines = clean.loc[order_mask].copy()
+
+    fact_sales = positive[
+        [
+            "InvoiceNo", "StockCode", "Description", "Quantity", "InvoiceDate",
+            "UnitPrice", "customer_key", "Country", "line_amount", "is_cancelled",
+        ]
+    ].rename(
+        columns={
+            "InvoiceNo": "invoice_no",
+            "StockCode": "stock_code",
+            "Description": "description",
+            "Quantity": "quantity",
+            "InvoiceDate": "invoice_date",
+            "UnitPrice": "unit_price",
+            "customer_key": "customer_id",
+            "Country": "country",
+            "line_amount": "line_revenue",
+        }
+    )
+
+    fact_orders = (
+        order_lines.groupby("InvoiceNo", as_index=False)
+        .agg(
+            invoice_date=("InvoiceDate", "min"),
+            customer_id=("customer_key", "first"),
+            country=("Country", "first"),
+            order_revenue=("line_amount", "sum"),
+            line_count=("InvoiceNo", "size"),
+            is_cancelled=("is_cancelled", "max"),
+        )
+        .rename(columns={"InvoiceNo": "invoice_no"})
+    )
+    fact_orders["order_revenue"] = fact_orders["order_revenue"].round(2)
+
+    customer_dim = pd.read_csv(PROCESSED_DIR / "dim_customer.csv")
+    customer_dim = customer_dim.rename(
+        columns={
+            "customer_key": "customer_id",
+            "sales_amount": "total_spend",
+        }
+    )[
+        [
+            "customer_id", "country", "first_order_date", "last_order_date",
+            "order_count", "total_spend",
+        ]
+    ]
+
+    product_dim = pd.read_csv(PROCESSED_DIR / "dim_product.csv")
+    product_dim = product_dim.rename(
+        columns={
+            "sales_amount": "total_revenue",
+            "units_sold": "total_quantity_sold",
+        }
+    )[["StockCode", "description", "total_revenue", "total_quantity_sold"]]
+    product_dim = product_dim.rename(columns={"StockCode": "stock_code"})
+
+    non_cancelled_orders = fact_orders.loc[~fact_orders["is_cancelled"]].copy()
+    country_dim = (
+        non_cancelled_orders.groupby("country", dropna=False, as_index=False)
+        .agg(
+            total_revenue=("order_revenue", "sum"),
+            order_count=("invoice_no", "nunique"),
+            customer_count=("customer_id", lambda values: values.dropna().nunique()),
+        )
+        .sort_values("total_revenue", ascending=False)
+    )
+    country_dim["total_revenue"] = country_dim["total_revenue"].round(2)
+
+    tables = {
+        "fact_sales": fact_sales,
+        "fact_orders": fact_orders,
+        "dim_products": product_dim,
+        "dim_customers": customer_dim,
+        "dim_countries": country_dim,
+    }
+    # Avoid naming the build file ``curated.*``: DuckDB derives the catalog
+    # name from the filename, which would make the catalog and ``curated``
+    # schema ambiguous while materializing tables.
+    temporary_path = PROCESSED_DIR / ".pipeline_build.duckdb"
+    if temporary_path.exists():
+        temporary_path.unlink()
+    connection = duckdb.connect(str(temporary_path))
+    try:
+        for table_name, frame in tables.items():
+            relation_name = f"_{table_name}_frame"
+            connection.register(relation_name, frame)
+            connection.execute(
+                f'CREATE TABLE main."{table_name}" AS SELECT * FROM "{relation_name}"'
+            )
+            connection.unregister(relation_name)
+        connection.execute(
+            "CREATE TABLE main.quality_summary AS "
+            "SELECT COUNT(*) AS curated_sales_rows FROM main.fact_sales"
+        )
+    finally:
+        connection.close()
+    os.replace(temporary_path, CURATED_DB_PATH)
+    return {name: int(len(frame)) for name, frame in tables.items()}
 
 
 def run() -> dict[str, Any]:
@@ -364,11 +487,12 @@ def run() -> dict[str, Any]:
     salt = os.environ.get("CUSTOMER_HASH_SALT", DEFAULT_SALT)
     clean, quality = normalize_source(frame, salt)
     checks = quality_checks(clean, manifest, quality)
+    curated_tables = build_curated_database(clean)
     manifest["customer_hash"] = "sha256(salt:CustomerID) truncated to 32 hex chars; salt is not written to outputs"
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8")
     (PROCESSED_DIR / "quality_metrics.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
     write_quality_report(manifest, quality, checks, clean)
-    return {"manifest": manifest, "quality": quality, "checks": checks}
+    return {"manifest": manifest, "quality": quality, "checks": checks, "curated_tables": curated_tables}
 
 
 if __name__ == "__main__":

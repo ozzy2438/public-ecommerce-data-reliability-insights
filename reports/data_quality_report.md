@@ -74,3 +74,4 @@ The source archive is a local input artifact and is not redistributed by the pro
 - `data/processed/fact_sales.csv`, `fact_orders.csv`
 - `data/processed/dim_customer.csv`, `dim_product.csv`
 - `data/processed/agg_monthly_sales.csv`, `agg_country_sales.csv`
+- `data/processed/curated.duckdb` (DuckDB database with `curated.*` tables)

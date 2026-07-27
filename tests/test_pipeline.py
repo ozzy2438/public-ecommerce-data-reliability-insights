@@ -10,7 +10,7 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
-from src.pipeline import EXPECTED_COLUMNS, EXPECTED_ROWS, MANIFEST_PATH, PROCESSED_DIR, QUALITY_REPORT_PATH, run  # noqa: E402
+from src.pipeline import CURATED_DB_PATH, EXPECTED_COLUMNS, EXPECTED_ROWS, MANIFEST_PATH, PROCESSED_DIR, QUALITY_REPORT_PATH, run  # noqa: E402
 
 
 class PipelineOutputTests(unittest.TestCase):
@@ -48,6 +48,34 @@ class PipelineOutputTests(unittest.TestCase):
         self.assertIn("exact_duplicates", report)
         for name in ["dim_customer.csv", "dim_product.csv", "agg_monthly_sales.csv", "agg_country_sales.csv", "quality_metrics.json"]:
             self.assertTrue((PROCESSED_DIR / name).exists(), name)
+
+    def test_curated_duckdb_schema_is_privacy_safe_and_reconciled(self) -> None:
+        import duckdb
+
+        self.assertTrue(CURATED_DB_PATH.exists())
+        with duckdb.connect(str(CURATED_DB_PATH), read_only=True) as connection:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+                ).fetchall()
+            }
+            self.assertEqual(
+                tables,
+                {"fact_sales", "fact_orders", "dim_products", "dim_customers", "dim_countries", "quality_summary"},
+            )
+            sales_columns = {
+                row[0]
+                for row in connection.execute("DESCRIBE curated.fact_sales").fetchall()
+            }
+            self.assertNotIn("CustomerID", sales_columns)
+            self.assertIn("customer_id", sales_columns)
+            sales_total, order_total = connection.execute(
+                "SELECT SUM(line_revenue), "
+                "(SELECT SUM(order_revenue) FROM curated.fact_orders WHERE NOT is_cancelled) "
+                "FROM curated.fact_sales"
+            ).fetchone()
+            self.assertAlmostEqual(float(sales_total), float(order_total), places=2)
 
 
 if __name__ == "__main__":
