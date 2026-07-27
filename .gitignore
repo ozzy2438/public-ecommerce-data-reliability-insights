@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+data/raw/*.zip
+data/raw/*.xlsx
+data/processed/*.csv
+data/processed/*.json

@@ -1,0 +1,36 @@
+{
+  "dataset": "UCI Online Retail",
+  "source_record_url": "https://archive.ics.uci.edu/dataset/352/online-retail",
+  "download_url": "https://archive.ics.uci.edu/static/public/352/online+retail.zip",
+  "citation": "Chen, D. (2015). Online Retail. UCI Machine Learning Repository. DOI: 10.24432/C5BW33.",
+  "license": "CC BY 4.0 (as stated on the UCI dataset record)",
+  "downloaded_at_utc": "2026-07-27T07:24:17Z",
+  "acquisition_mode": "existing_local_archive",
+  "archive_path": "data/raw/online-retail.zip",
+  "archive_sha256": "f5385cbb54bbebf7196389109c6b0621faab0c304e3702548165e71c84aede8b",
+  "workbook_name": "Online Retail.xlsx",
+  "workbook_bytes": 23715344,
+  "workbook_sha256": "43465a06f2ccf7c8b5bd2892bc7defb52f97487934fe93b16ae4c3936424676d",
+  "row_count": 541909,
+  "columns": [
+    "InvoiceNo",
+    "StockCode",
+    "Description",
+    "Quantity",
+    "InvoiceDate",
+    "UnitPrice",
+    "CustomerID",
+    "Country"
+  ],
+  "dtypes_as_read": {
+    "InvoiceNo": "object",
+    "StockCode": "object",
+    "Description": "object",
+    "Quantity": "int64",
+    "InvoiceDate": "datetime64[us]",
+    "UnitPrice": "float64",
+    "CustomerID": "float64",
+    "Country": "str"
+  },
+  "customer_hash": "sha256(salt:CustomerID) truncated to 32 hex chars; salt is not written to outputs"
+}
