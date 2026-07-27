@@ -6,6 +6,8 @@
   "returning_customer_revenue_pct": 93.09,
   "returning_customer_revenue_gbp": 8273219.33,
   "attributed_revenue_gbp": 8887208.89,
+  "guest_revenue_gbp": 1754901.91,
+  "guest_revenue_pct": 16.49,
   "monthly_revenue": [
     {
       "month": "2010-12",

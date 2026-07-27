@@ -20,7 +20,7 @@ _Generated from KPI analysis. All figures in GBP (£)._
 
 **Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders` filtered to `customer_id IS NOT NULL`. Guest orders (null `customer_id`, ~£1.75M) are excluded from both numerator and denominator.
 
-**Business implication:** Both customer-count share and attributed revenue share confirm that repeat buyers dominate this business. Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than customer acquisition. Guest checkout rate (~25% of revenue) means the true retention picture is partially obscured.
+**Business implication:** Both customer-count share and attributed revenue share confirm that repeat buyers dominate this business. Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than customer acquisition. Guest orders account for ~16.5% of total revenue (£1,754,901.91), so the true retention picture is partially obscured.
 
 ---
 

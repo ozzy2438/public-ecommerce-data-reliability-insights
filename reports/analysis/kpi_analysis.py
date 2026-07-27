@@ -95,8 +95,6 @@ def main():
     # KPI 4b — Returning Customer Revenue Share (attributed revenue only)
     # Denominator = revenue from orders with a known customer_id (guest orders excluded).
     # Numerator   = revenue from returning customers (order_count > 1) among those.
-    # 77.74% would include guest orders in the denominator; we exclude them so the metric
-    # is entirely within the attributed (known-customer) revenue base.
     rows = run(
         """
         SELECT
@@ -115,6 +113,22 @@ def main():
     results["returning_customer_revenue_pct"] = rows[0]["returning_customer_revenue_pct"]
     results["returning_customer_revenue_gbp"] = rows[0]["returning_customer_revenue_gbp"]
     results["attributed_revenue_gbp"] = rows[0]["attributed_revenue_gbp"]
+
+    # Guest revenue — orders with null customer_id (not attributable to any known customer)
+    rows = run(
+        """
+        SELECT
+            ROUND(SUM(CASE WHEN customer_id IS NULL THEN order_revenue ELSE 0 END), 2)
+                AS guest_revenue_gbp,
+            ROUND(100.0 * SUM(CASE WHEN customer_id IS NULL THEN order_revenue ELSE 0 END)
+                  / NULLIF(SUM(order_revenue), 0), 2) AS guest_revenue_pct
+        FROM curated.fact_orders
+        WHERE NOT is_cancelled
+        """,
+        con,
+    )
+    results["guest_revenue_gbp"] = rows[0]["guest_revenue_gbp"]
+    results["guest_revenue_pct"] = rows[0]["guest_revenue_pct"]
 
     # KPI 5 — Monthly Revenue & Growth
     rows = run(
@@ -217,6 +231,8 @@ def _write_insights(r: dict):
     ret_rev_pct = r.get("returning_customer_revenue_pct") or 0
     ret_rev_gbp = r.get("returning_customer_revenue_gbp") or 0
     attr_rev_gbp = r.get("attributed_revenue_gbp") or 0
+    guest_rev_pct = r.get("guest_revenue_pct") or 0
+    guest_rev_gbp = r.get("guest_revenue_gbp") or 0
 
     lines = [
         "# Business Insights — Public E-Commerce Platform",
@@ -251,7 +267,8 @@ def _write_insights(r: dict):
         "**Business implication:** Both customer-count share and attributed revenue share confirm "
         "that repeat buyers dominate this business. Retention programs (loyalty rewards, re-engagement "
         "campaigns) likely have higher ROI than customer acquisition. "
-        "Guest checkout rate (~25% of revenue) means the true retention picture is partially obscured.",
+        f"Guest orders account for ~{guest_rev_pct:.1f}% of total revenue (£{guest_rev_gbp:,.2f}), "
+        "so the true retention picture is partially obscured.",
         "",
         "---",
         "",
