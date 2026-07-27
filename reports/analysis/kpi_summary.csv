@@ -1,0 +1,20 @@
+metric,value,unit,scope,source
+total_revenue_gbp,10642110.80,GBP,"Valid non-cancelled sales lines",reports/analysis/kpi_results.json
+total_orders,19960,orders,"Distinct non-cancelled positive-sales invoices",reports/analysis/kpi_results.json
+avg_order_value_gbp,533.17,GBP/order,"Total revenue divided by total orders",reports/analysis/kpi_results.json
+repeat_purchase_rate_pct,65.58,percent,"Identified customers with more than one order divided by identified customers",reports/analysis/kpi_results.json
+returning_customer_revenue_pct,93.09,percent,"Returning known-customer revenue divided by known-customer attributed revenue",reports/analysis/kpi_results.json
+returning_customer_revenue_gbp,8273219.33,GBP,"Revenue from known customers with more than one order",reports/analysis/kpi_results.json
+attributed_revenue_gbp,8887208.89,GBP,"Valid non-cancelled revenue with a non-null customer key",reports/analysis/kpi_results.json
+guest_revenue_gbp,1754901.91,GBP,"Valid non-cancelled revenue with a null customer key",reports/analysis/kpi_results.json
+guest_revenue_pct,16.49,percent,"Guest revenue divided by total valid non-cancelled revenue",reports/analysis/kpi_results.json
+cancellation_rate_pct,16.12,percent,"Cancelled invoice count divided by all invoice count",reports/analysis/kpi_results.json
+peak_month,2011-11,YYYY-MM,"Month with highest valid revenue",reports/analysis/kpi_results.json
+peak_month_revenue_gbp,1503866.78,GBP,"Valid revenue in peak month 2011-11",reports/analysis/kpi_results.json
+lowest_month,2011-02,YYYY-MM,"Month with lowest valid revenue",reports/analysis/kpi_results.json
+lowest_month_revenue_gbp,522545.56,GBP,"Valid revenue in lowest month 2011-02",reports/analysis/kpi_results.json
+top_retail_product,22423,text,"REGENCY CAKESTAND 3 TIER; DOT/POST/M excluded",reports/analysis/kpi_results.json
+top_retail_product_revenue_gbp,174156.54,GBP,"Revenue for StockCode 22423",reports/analysis/kpi_results.json
+top_country,United Kingdom,text,"Country with highest valid revenue",reports/analysis/kpi_results.json
+top_country_revenue_gbp,9001744.09,GBP,"Valid revenue from United Kingdom",reports/analysis/kpi_results.json
+top_country_revenue_pct,84.59,percent,"United Kingdom revenue divided by total valid revenue",reports/analysis/kpi_results.json
