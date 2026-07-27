@@ -350,9 +350,17 @@ def write_quality_report(manifest: dict[str, Any], quality: dict[str, Any], chec
 def run() -> dict[str, Any]:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    previous_manifest: dict[str, Any] = {}
+    if MANIFEST_PATH.exists():
+        try:
+            previous_manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            previous_manifest = {}
     archive_path, mode = ensure_archive()
     frame, manifest = read_source(archive_path)
     manifest["acquisition_mode"] = mode
+    if previous_manifest.get("archive_sha256") == manifest.get("archive_sha256"):
+        manifest["downloaded_at_utc"] = previous_manifest.get("downloaded_at_utc", manifest["downloaded_at_utc"])
     salt = os.environ.get("CUSTOMER_HASH_SALT", DEFAULT_SALT)
     clean, quality = normalize_source(frame, salt)
     checks = quality_checks(clean, manifest, quality)
