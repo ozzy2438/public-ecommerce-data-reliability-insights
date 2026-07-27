@@ -3,8 +3,9 @@
   "total_orders": 19960,
   "avg_order_value_gbp": 533.17,
   "repeat_purchase_rate_pct": 65.58,
-  "returning_customer_revenue_pct": 77.74,
+  "returning_customer_revenue_pct": 93.09,
   "returning_customer_revenue_gbp": 8273219.33,
+  "attributed_revenue_gbp": 8887208.89,
   "monthly_revenue": [
     {
       "month": "2010-12",

@@ -247,26 +247,29 @@ FROM curated.fact_orders;
 
 ---
 
-### KPI 4b — Returning Customer Revenue Share
+### KPI 4b — Returning Customer Revenue Share (Attributed Revenue Base)
 
 | Field | Value |
 |-------|-------|
-| **Definition** | Share of non-cancelled order revenue attributable to customers who placed more than one order |
+| **Definition** | Share of known-customer (attributed) revenue from customers who placed more than one order |
 | **Source columns** | `order_revenue`, `customer_id`, `order_count` |
-| **Filter** | `fact_orders.is_cancelled = FALSE`; customers matched via `dim_customers` LEFT JOIN |
+| **Filter** | `fact_orders.is_cancelled = FALSE` AND `fact_orders.customer_id IS NOT NULL` |
+| **Denominator** | Revenue from orders with a known `customer_id` only (guest orders excluded from both num. and denom.) |
 | **Unit** | Percentage (%) and GBP (£) |
 | **Table** | `curated.fact_orders`, `curated.dim_customers` |
-| **Caveat** | Guest orders (null `customer_id`) cannot be joined; they are excluded from both returning and one-time segments |
+| **Caveat** | Guest orders (~£1.75M, ~16.5% of total revenue) are excluded from the entire calculation. The metric answers: "of revenue we can attribute to a known customer, what fraction comes from repeat buyers?" |
 
 ```sql
 SELECT
     ROUND(100.0 * SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END)
           / NULLIF(SUM(fo.order_revenue), 0), 2) AS returning_customer_revenue_pct,
     ROUND(SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END), 2)
-        AS returning_customer_revenue_gbp
+        AS returning_customer_revenue_gbp,
+    ROUND(SUM(fo.order_revenue), 2) AS attributed_revenue_gbp
 FROM curated.fact_orders fo
 LEFT JOIN curated.dim_customers dc ON fo.customer_id = dc.customer_id
-WHERE NOT fo.is_cancelled;
+WHERE NOT fo.is_cancelled
+  AND fo.customer_id IS NOT NULL;
 ```
 
 ---

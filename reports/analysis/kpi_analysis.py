@@ -92,24 +92,29 @@ def main():
     )
     results["repeat_purchase_rate_pct"] = rows[0]["repeat_rate"]
 
-    # KPI 4b — Returning Customer Revenue Share
-    # Returning customers: those with order_count > 1 in dim_customers (identified buyers only).
-    # Guest orders (null customer_id) are not joinable and count as non-returning.
+    # KPI 4b — Returning Customer Revenue Share (attributed revenue only)
+    # Denominator = revenue from orders with a known customer_id (guest orders excluded).
+    # Numerator   = revenue from returning customers (order_count > 1) among those.
+    # 77.74% would include guest orders in the denominator; we exclude them so the metric
+    # is entirely within the attributed (known-customer) revenue base.
     rows = run(
         """
         SELECT
             ROUND(100.0 * SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END)
                   / NULLIF(SUM(fo.order_revenue), 0), 2) AS returning_customer_revenue_pct,
             ROUND(SUM(CASE WHEN dc.order_count > 1 THEN fo.order_revenue ELSE 0 END), 2)
-                AS returning_customer_revenue_gbp
+                AS returning_customer_revenue_gbp,
+            ROUND(SUM(fo.order_revenue), 2) AS attributed_revenue_gbp
         FROM curated.fact_orders fo
         LEFT JOIN curated.dim_customers dc ON fo.customer_id = dc.customer_id
         WHERE NOT fo.is_cancelled
+          AND fo.customer_id IS NOT NULL
         """,
         con,
     )
     results["returning_customer_revenue_pct"] = rows[0]["returning_customer_revenue_pct"]
     results["returning_customer_revenue_gbp"] = rows[0]["returning_customer_revenue_gbp"]
+    results["attributed_revenue_gbp"] = rows[0]["attributed_revenue_gbp"]
 
     # KPI 5 — Monthly Revenue & Growth
     rows = run(
@@ -211,6 +216,7 @@ def _write_insights(r: dict):
     repeat_rate = r.get("repeat_purchase_rate_pct") or 0
     ret_rev_pct = r.get("returning_customer_revenue_pct") or 0
     ret_rev_gbp = r.get("returning_customer_revenue_gbp") or 0
+    attr_rev_gbp = r.get("attributed_revenue_gbp") or 0
 
     lines = [
         "# Business Insights — Public E-Commerce Platform",
@@ -234,16 +240,18 @@ def _write_insights(r: dict):
         "## Insight 2 — Returning Customers Drive the Majority of Revenue",
         "",
         f"**Observation:** {repeat_rate:.1f}% of identified customers placed more than one order. "
-        f"These returning customers account for **{ret_rev_pct:.1f}% of total attributed revenue** "
-        f"(£{ret_rev_gbp:,.2f} of total orders joined to known customers).",
+        f"Among orders attributable to known customers (guest orders excluded), returning customers "
+        f"account for **{ret_rev_pct:.1f}% of attributed revenue** "
+        f"(£{ret_rev_gbp:,.2f} of £{attr_rev_gbp:,.2f} known-customer revenue).",
         "",
-        "**Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders.order_revenue`. "
-        "Guest orders (null `customer_id`) are not attributed to either segment.",
+        "**Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders` "
+        "filtered to `customer_id IS NOT NULL`. Guest orders (null `customer_id`, ~£1.75M) "
+        "are excluded from both numerator and denominator.",
         "",
-        "**Business implication:** Both customer-count share and revenue share confirm that repeat buyers "
-        "are the backbone of this business. Retention programs (loyalty rewards, re-engagement campaigns) "
-        "likely have higher ROI than customer acquisition. "
-        "Guest checkout rate (~25%) means true repeat-purchase rate is understated.",
+        "**Business implication:** Both customer-count share and attributed revenue share confirm "
+        "that repeat buyers dominate this business. Retention programs (loyalty rewards, re-engagement "
+        "campaigns) likely have higher ROI than customer acquisition. "
+        "Guest checkout rate (~25% of revenue) means the true retention picture is partially obscured.",
         "",
         "---",
         "",
@@ -268,7 +276,7 @@ def _write_insights(r: dict):
         f"| Total Orders | {r.get('total_orders', 0):,} |",
         f"| Average Order Value | £{r.get('avg_order_value_gbp', 0):,.2f} |",
         f"| Repeat Purchase Rate | {repeat_rate:.1f}% |",
-        f"| Returning Customer Revenue Share | {ret_rev_pct:.1f}% |",
+        f"| Returning Customer Revenue Share (attributed) | {ret_rev_pct:.1f}% |",
         f"| Cancellation Rate | {r.get('cancellation_rate_pct', 0):.1f}% |",
         "",
     ]

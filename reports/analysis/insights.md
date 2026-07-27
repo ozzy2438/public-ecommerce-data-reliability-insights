@@ -16,11 +16,11 @@ _Generated from KPI analysis. All figures in GBP (£)._
 
 ## Insight 2 — Returning Customers Drive the Majority of Revenue
 
-**Observation:** 65.6% of identified customers placed more than one order. These returning customers account for **77.7% of total attributed revenue** (£8,273,219.33 of total orders joined to known customers).
+**Observation:** 65.6% of identified customers placed more than one order. Among orders attributable to known customers (guest orders excluded), returning customers account for **93.1% of attributed revenue** (£8,273,219.33 of £8,887,208.89 known-customer revenue).
 
-**Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders.order_revenue`. Guest orders (null `customer_id`) are not attributed to either segment.
+**Evidence:** `curated.dim_customers.order_count > 1` joined to `curated.fact_orders` filtered to `customer_id IS NOT NULL`. Guest orders (null `customer_id`, ~£1.75M) are excluded from both numerator and denominator.
 
-**Business implication:** Both customer-count share and revenue share confirm that repeat buyers are the backbone of this business. Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than customer acquisition. Guest checkout rate (~25%) means true repeat-purchase rate is understated.
+**Business implication:** Both customer-count share and attributed revenue share confirm that repeat buyers dominate this business. Retention programs (loyalty rewards, re-engagement campaigns) likely have higher ROI than customer acquisition. Guest checkout rate (~25% of revenue) means the true retention picture is partially obscured.
 
 ---
 
@@ -42,5 +42,5 @@ _Generated from KPI analysis. All figures in GBP (£)._
 | Total Orders | 19,960 |
 | Average Order Value | £533.17 |
 | Repeat Purchase Rate | 65.6% |
-| Returning Customer Revenue Share | 77.7% |
+| Returning Customer Revenue Share (attributed) | 93.1% |
 | Cancellation Rate | 16.1% |
