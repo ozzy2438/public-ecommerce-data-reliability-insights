@@ -1,5 +1,7 @@
 # Public E-Commerce Data Reliability & Insights Platform
 
+![Dashboard Preview](reports/dashboard/dashboard_preview.gif)
+
 This repository contains the accepted data-quality handoff and the Phase 3
 decision artifacts for the UCI Online Retail dataset. The final integration
 surface is deliberately local-only: no remote is configured, and the dashboard
