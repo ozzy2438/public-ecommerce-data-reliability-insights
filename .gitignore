@@ -2,8 +2,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-data/raw/*.zip
-data/raw/*.xlsx
-data/processed/*.csv
-data/processed/*.json
-data/processed/*.duckdb
+
+# Local source and processed payloads are never public. Keep only provenance
+# metadata and directory markers under these paths.
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/source_manifest.json
+data/processed/*
+!data/processed/.gitkeep
